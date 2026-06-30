@@ -1,0 +1,14 @@
+---
+description: 
+globs: *.tsx, *.ts, *.jsx, *.js
+alwaysApply: false
+---
+
+# React Native Conventions
+
+- Fetch data through a dedicated API/service layer, not inline in components.
+- Always handle loading and error states explicitly.
+- Keep the UI responsive after updates (optimistic UI or fast local state sync).
+- Use functional components and hooks; keep components small and composable.
+- Separate presentation from data-fetching logic.
+- Consistent naming and clear file organization.

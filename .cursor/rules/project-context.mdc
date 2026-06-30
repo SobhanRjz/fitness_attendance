@@ -1,0 +1,41 @@
+---
+description: Core context and engineering standards for the project
+globs:
+alwaysApply: true
+---
+
+# Project Context
+
+Fitness management platform. Backend is Laravel (REST API), frontend is React Native (Expo).
+High throughput: 1000+ classes/day, 20+ attendees each, concurrent writes from multiple staff.
+
+## Engineering Principles
+- Prioritize clean, readable, maintainable code over cleverness.
+- Enforce separation of responsibilities; keep controllers thin.
+- Consider scalability and concurrency in every design decision.
+- Avoid unnecessary database operations; favor efficient queries.
+- Document any assumptions made where requirements are ambiguous.
+- All non-trivial logic must be covered by automated tests.
+- Handle errors and edge cases early with guard clauses; keep the happy path last.
+
+## Architecture
+- Backend: layered architecture. Controllers (HTTP only) → Form Requests (validation) → Services/Actions (business logic) → Eloquent Models (persistence) → API Resources (response shaping). Controllers must not contain business logic or query building.
+- Frontend: feature-based structure. Separate presentation (components) from data access (hooks/services) and state. No API calls inline in components.
+- Single responsibility per class/module; prefer composition over inheritance.
+- Dependencies point inward: business logic never depends on framework-specific HTTP or UI details.
+
+## Naming Conventions
+### Backend (Laravel / PHP)
+- Classes: PascalCase. Controllers end in `Controller`, services in `Service`, single-use actions in `Action`, form requests in `Request`, resources in `Resource`.
+- Methods & variables: camelCase. Booleans read as predicates (`isAttended`, `hasCheckedIn`).
+- Database tables: plural snake_case; columns snake_case; primary keys `id`; foreign keys `<singular>_id`.
+- Routes: kebab-case, plural nouns, RESTful verbs over custom action names.
+
+### Frontend (React Native / Expo)
+- Components & their files: PascalCase. Hooks: camelCase prefixed with `use`.
+- Variables & functions: camelCase; event handlers prefixed `handle` (`handleToggle`).
+- Constants: UPPER_SNAKE_CASE. Types/interfaces: PascalCase.
+
+## Consistency
+- One naming style per layer—do not mix conventions within a file.
+- Names describe intent, not implementation; avoid abbreviations and filler words.

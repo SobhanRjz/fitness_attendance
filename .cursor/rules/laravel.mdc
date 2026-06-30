@@ -1,0 +1,16 @@
+---
+description: 
+globs: *.php
+alwaysApply: false
+---
+
+# Laravel Conventions
+
+- Use Laravel core features idiomatically (Eloquent, validation, resources, policies).
+- Keep controllers thin; move business logic into service or action classes.
+- Use Form Requests for validation, API Resources for response shaping.
+- Design efficient queries: eager-load relations, avoid N+1, use bulk operations for batch updates.
+- Handle concurrent attendance updates safely (avoid race conditions on shared writes).
+- Return consistent JSON responses and appropriate HTTP status codes.
+- Write feature tests for endpoints and unit tests for business logic.
+- Use migrations with sensible indexing and foreign-key constraints.
