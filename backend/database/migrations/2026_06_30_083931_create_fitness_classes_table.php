@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('gym_id')->constrained()->cascadeOnDelete();
             $table->string('name');
+            $table->time('start_time');
             $table->timestamps();
         });
     }

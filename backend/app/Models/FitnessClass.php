@@ -11,7 +11,7 @@ class FitnessClass extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['gym_id', 'name'];
+    protected $fillable = ['gym_id', 'name', 'start_time'];
 
     public function gym(): BelongsTo
     {

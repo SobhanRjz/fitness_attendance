@@ -17,8 +17,22 @@ class FitnessClassFactory extends Factory
     {
         return [
             'gym_id' => Gym::factory(),
-            'name' => fake()->randomElement(['Yoga', 'Spin', 'HIIT', 'Pilates', 'Boxing'])
-                .' '.fake()->time('H:i'),
+            'name' => fake()->randomElement([
+                'Yoga',
+                'HIIT',
+                'Pilates',
+                'Spin',
+                'Boxing',
+            ]),
+            'start_time' => fake()->randomElement([
+                '06:00:00',
+                '07:00:00',
+                '08:30:00',
+                '12:00:00',
+                '17:30:00',
+                '18:30:00',
+                '19:30:00',
+            ]),
         ];
     }
 }
