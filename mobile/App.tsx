@@ -1,20 +1,6 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { DEMO_CLASS_ID, DEMO_CLASS_INFO } from './src/features/attendance/constants';
+import { AttendanceScreen } from './src/features/attendance/screens/AttendanceScreen';
 
 export default function App() {
-  return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+  return <AttendanceScreen classId={DEMO_CLASS_ID} classInfo={DEMO_CLASS_INFO} />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
