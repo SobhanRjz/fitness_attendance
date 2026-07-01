@@ -4,6 +4,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use App\Exceptions\AttendanceConflictException;
+use App\Http\Resources\AttendeeResource;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,4 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+        $exceptions->render(function (AttendanceConflictException $e, Request $request) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'data' => new AttendeeResource($e->current->load('member:id,name')),
+            ], 409);
+        });
     })->create();
