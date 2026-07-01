@@ -16,6 +16,10 @@ class Attendance extends Model
         'member_id',
         'status',
         'marked_at',
+        // Optimistic-locking token. Mass-assignable so internal callers (e.g. the
+        // service layer's atomic update) and factories can set it directly; it is
+        // never taken verbatim from client-controlled request input.
+        'version',
     ];
 
     protected $casts = [
