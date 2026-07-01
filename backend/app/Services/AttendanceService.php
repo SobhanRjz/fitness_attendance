@@ -1,0 +1,73 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\AttendanceStatus;
+use App\Models\Attendance;
+use App\Models\FitnessClass;
+use App\Models\Member;
+use Illuminate\Database\Eloquent\Collection;
+
+/**
+ * Attendance business logic.
+ *
+ * The controller stays small and delegates the actual rules to this service.
+ */
+class AttendanceService
+{
+    /**
+     * Return all attendees for a class.
+     *
+     * Eager-load the member relation to avoid an N+1 query when serializing rows.
+     */
+    public function getAttendees(FitnessClass $class): Collection
+    {
+        return $class->attendances()
+            ->with('member:id,name')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Set one attendee to the requested status.
+     *
+     * Important: this updates an existing attendance row only. If the member is
+     * not enrolled in this class, Laravel returns 404 instead of creating a new
+     * row accidentally.
+     */
+    public function markAttendance(
+        FitnessClass $class,
+        Member $member,
+        AttendanceStatus $status
+    ): Attendance {
+        $attendance = $class->attendances()
+            ->where('member_id', $member->id)
+            ->firstOrFail();
+
+        $attendance->update([
+            'status' => $status,
+            'marked_at' => $this->markedAtFor($status),
+        ]);
+
+        return $attendance;
+    }
+
+    /**
+     * Set every attendee in the class to the same status.
+     *
+     * This is one SQL UPDATE, not one query per attendee.
+     */
+    public function markAllAttendance(FitnessClass $class, AttendanceStatus $status): int
+    {
+        return $class->attendances()->update([
+            'status' => $status,
+            'marked_at' => $this->markedAtFor($status),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function markedAtFor(AttendanceStatus $status): ?\DateTimeInterface
+    {
+        return $status === AttendanceStatus::Attended ? now() : null;
+    }
+}
