@@ -50,6 +50,42 @@ class BulkUpdateAttendanceTest extends TestCase
         );
     }
 
+    public function test_can_bulk_update_all_attendees_to_absent(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+
+        $members = Member::factory()->count(3)->for($gym)->create();
+
+        foreach ($members as $member) {
+            Attendance::factory()
+                ->for($class)
+                ->for($member)
+                ->attended()
+                ->create();
+        }
+
+        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+            'status' => AttendanceStatus::NotAttended->value,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('updated', 3)
+            ->assertJsonPath('status', AttendanceStatus::NotAttended->value);
+
+        $this->assertEquals(
+            3,
+            Attendance::where('status', AttendanceStatus::NotAttended->value)->count()
+        );
+
+        // Marking everyone absent must also clear marked_at, mirroring the
+        // single-attendee update's behavior.
+        $this->assertEquals(
+            3,
+            Attendance::whereNull('marked_at')->count()
+        );
+    }
+
     public function test_bulk_update_validates_status(): void
     {
         $class = FitnessClass::factory()->create();
