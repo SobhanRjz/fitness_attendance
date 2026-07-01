@@ -41,6 +41,13 @@ class BulkUpdateAttendanceTest extends TestCase
             3,
             Attendance::where('status', AttendanceStatus::Attended->value)->count()
         );
+
+        // Bulk update doesn't check individual versions, but it must still bump
+        // them so a stale single-attendee update issued afterward is rejected.
+        $this->assertEquals(
+            3,
+            Attendance::where('version', 2)->count()
+        );
     }
 
     public function test_bulk_update_validates_status(): void
