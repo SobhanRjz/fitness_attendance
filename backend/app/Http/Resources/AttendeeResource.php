@@ -24,6 +24,9 @@ class AttendeeResource extends JsonResource
             // ->value gives the string ("attended"), not the enum object,
             // so the JSON stays a plain string the client can compare against.
             'status' => $this->status->value,
+            // Optimistic-locking token: the client must echo this back on its next
+            // update so the server can detect and reject writes based on stale data.
+            'version' => $this->version,
             // ISO-8601 so the client can parse it in any timezone; null when unmarked.
             'marked_at' => $this->marked_at?->toIso8601String(),
         ];
