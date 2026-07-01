@@ -20,7 +20,7 @@ class UpdateAttendanceTest extends TestCase
         $class = FitnessClass::factory()->for($gym)->create();
         $member = Member::factory()->for($gym)->create();
 
-        Attendance::factory()
+        $attendance = Attendance::factory()
             ->for($class)
             ->for($member)
             ->notAttended()
@@ -28,11 +28,13 @@ class UpdateAttendanceTest extends TestCase
 
         $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
+            'version' => $attendance->version,
         ]);
 
         $response->assertOk()
             ->assertJsonPath('data.member.id', $member->id)
-            ->assertJsonPath('data.status', AttendanceStatus::Attended->value);
+            ->assertJsonPath('data.status', AttendanceStatus::Attended->value)
+            ->assertJsonPath('data.version', $attendance->version + 1);
 
         $this->assertDatabaseHas('attendances', [
             'fitness_class_id' => $class->id,
@@ -47,7 +49,7 @@ class UpdateAttendanceTest extends TestCase
         $class = FitnessClass::factory()->for($gym)->create();
         $member = Member::factory()->for($gym)->create();
 
-        Attendance::factory()
+        $attendance = Attendance::factory()
             ->for($class)
             ->for($member)
             ->attended()
@@ -55,6 +57,7 @@ class UpdateAttendanceTest extends TestCase
 
         $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::NotAttended->value,
+            'version' => $attendance->version,
         ]);
 
         $response->assertOk()
@@ -74,7 +77,7 @@ class UpdateAttendanceTest extends TestCase
         $class = FitnessClass::factory()->for($gym)->create();
         $member = Member::factory()->for($gym)->create();
 
-        Attendance::factory()
+        $attendance = Attendance::factory()
             ->for($class)
             ->for($member)
             ->notAttended()
@@ -82,6 +85,7 @@ class UpdateAttendanceTest extends TestCase
 
         $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
+            'version' => $attendance->version,
         ])->assertOk();
 
         $this->assertEquals(1, Attendance::count());
@@ -131,8 +135,38 @@ class UpdateAttendanceTest extends TestCase
 
         $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
+            'version' => 1,
         ]);
 
         $response->assertNotFound();
+    }
+
+    public function test_update_with_stale_version_returns_409_and_does_not_overwrite(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+        $member = Member::factory()->for($gym)->create();
+
+        $attendance = Attendance::factory()
+            ->for($class)->for($member)
+            ->notAttended()
+            ->create(); // version = 1
+
+        // Simulate staff A's update happening first.
+        $attendance->update(['status' => AttendanceStatus::Attended, 'version' => 2]);
+
+        // Staff B still has version 1 on screen and tries to write "not_attended".
+        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+            'status' => AttendanceStatus::NotAttended->value,
+            'version' => 1,
+        ]);
+
+        $response->assertStatus(409);
+
+        // Staff A's write must survive — this is the actual bug being fixed.
+        $this->assertDatabaseHas('attendances', [
+            'id' => $attendance->id,
+            'status' => AttendanceStatus::Attended->value,
+        ]);
     }
 }
