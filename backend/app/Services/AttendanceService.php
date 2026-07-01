@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\AttendanceStatus;
+use App\Exceptions\AttendanceConflictException;
 use App\Models\Attendance;
 use App\Models\FitnessClass;
 use App\Models\Member;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Attendance business logic.
@@ -38,18 +40,30 @@ class AttendanceService
     public function markAttendance(
         FitnessClass $class,
         Member $member,
-        AttendanceStatus $status
+        AttendanceStatus $status,
+        int $expectedVersion
     ): Attendance {
         $attendance = $class->attendances()
             ->where('member_id', $member->id)
             ->firstOrFail();
 
-        $attendance->update([
-            'status' => $status,
-            'marked_at' => $this->markedAtFor($status),
-        ]);
+        // Single atomic statement: UPDATE ... WHERE version = ?. If another
+        // request already changed this row, `version` no longer matches and
+        // 0 rows are affected — no race window between "check" and "write".
+        $updated = $class->attendances()
+            ->where('member_id', $member->id)
+            ->where('version', $expectedVersion)
+            ->update([
+                'status' => $status,
+                'marked_at' => $this->markedAtFor($status),
+                'version' => $expectedVersion + 1,
+            ]);
 
-        return $attendance;
+        if ($updated === 0) {
+            throw new AttendanceConflictException($attendance->fresh());
+        }
+
+        return $attendance->fresh();
     }
 
     /**
@@ -62,6 +76,7 @@ class AttendanceService
         return $class->attendances()->update([
             'status' => $status,
             'marked_at' => $this->markedAtFor($status),
+            'version' => DB::raw('version + 1'),
             'updated_at' => now(),
         ]);
     }
