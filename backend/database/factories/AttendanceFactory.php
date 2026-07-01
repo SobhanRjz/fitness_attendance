@@ -23,6 +23,7 @@ class AttendanceFactory extends Factory
             'fitness_class_id' => FitnessClass::factory(),
             'member_id' => Member::factory(),
             'status' => $status,
+            'version' => 1,
             // Only attended rows carry a timestamp; not-attended is the resting state.
             'marked_at' => $status === AttendanceStatus::Attended ? now() : null,
         ];
