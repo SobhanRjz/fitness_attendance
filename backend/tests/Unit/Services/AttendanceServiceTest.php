@@ -154,6 +154,37 @@ class AttendanceServiceTest extends TestCase
         );
     }
 
+    public function test_mark_all_attendance_sets_not_attended_and_clears_marked_at(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+
+        $members = Member::factory()->count(3)->for($gym)->create();
+
+        foreach ($members as $member) {
+            Attendance::factory()
+                ->for($class)
+                ->for($member)
+                ->attended()
+                ->create();
+        }
+
+        $service = new AttendanceService();
+
+        $updated = $service->markAllAttendance(
+            $class,
+            AttendanceStatus::NotAttended
+        );
+
+        $this->assertEquals(3, $updated);
+        $this->assertEquals(
+            3,
+            Attendance::where('status', AttendanceStatus::NotAttended->value)
+                ->whereNull('marked_at')
+                ->count()
+        );
+    }
+
     public function test_mark_all_attendance_increments_version_for_every_row(): void
     {
         $gym = Gym::factory()->create();
