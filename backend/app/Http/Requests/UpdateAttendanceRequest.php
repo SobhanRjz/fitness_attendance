@@ -22,6 +22,7 @@ class UpdateAttendanceRequest extends FormRequest
         return [
             // Must be one of the enum's backing values ("attended" / "not_attended").
             'status' => ['required', Rule::enum(AttendanceStatus::class)],
+            'version' => ['required', 'integer', 'min:1'], // Optimistic concurrency control
         ];
     }
 }
