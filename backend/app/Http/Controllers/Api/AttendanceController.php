@@ -45,6 +45,7 @@ class AttendanceController extends Controller
             $class,
             $member,
             AttendanceStatus::from($request->validated('status')),
+            (int) $request->validated('version'),
         );
 
         // Load the member so the resource can serialize it without an extra round-trip.
