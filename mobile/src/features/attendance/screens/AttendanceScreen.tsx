@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { FlatList, Platform, SafeAreaView, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
+import { FlatList, Platform, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../../theme/colors';
 import { AttendeeRow } from '../components/AttendeeRow';
 import { ClassSummaryCard } from '../components/ClassSummaryCard';
@@ -60,7 +61,7 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
         />
       </View>
 
-      <SafeAreaView style={styles.content}>
+      <SafeAreaView style={styles.content} edges={['bottom']}>
         {status === 'loading' && <RosterSkeleton />}
 
         {status === 'error' && <RosterErrorState message={errorMessage} onRetry={retry} />}
