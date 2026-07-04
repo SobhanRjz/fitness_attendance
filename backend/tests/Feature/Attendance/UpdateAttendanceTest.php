@@ -169,4 +169,33 @@ class UpdateAttendanceTest extends TestCase
             'status' => AttendanceStatus::Attended->value,
         ]);
     }
+
+    public function test_conflict_response_body_reflects_the_current_row(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+        $member = Member::factory()->for($gym)->create();
+
+        $attendance = Attendance::factory()
+            ->for($class)->for($member)
+            ->notAttended()
+            ->create(); // version = 1
+
+        // Staff A's update lands first.
+        $attendance->update(['status' => AttendanceStatus::Attended, 'version' => 2]);
+
+        // Staff B still has version 1 on screen.
+        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+            'status' => AttendanceStatus::NotAttended->value,
+            'version' => 1,
+        ]);
+
+        // The 409 body must hand back the authoritative current state — not the
+        // rejected input — so the client can refresh its UI without a second request.
+        $response->assertStatus(409)
+            ->assertJsonPath('data.member.id', $member->id)
+            ->assertJsonPath('data.status', AttendanceStatus::Attended->value)
+            ->assertJsonPath('data.version', 2)
+            ->assertJsonStructure(['message', 'data' => ['id', 'member', 'status', 'version', 'marked_at']]);
+    }
 }
