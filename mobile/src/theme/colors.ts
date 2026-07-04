@@ -10,6 +10,7 @@ export const colors = {
 
   accent: '#7C5CFC',
   accentMuted: '#3A3452',
+  accentSoft: '#EFEAFE',
 
   progressTrack: '#2E2C3A',
   progressFill: '#7C5CFC',
