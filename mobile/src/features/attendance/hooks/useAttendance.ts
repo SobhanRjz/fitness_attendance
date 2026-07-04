@@ -7,6 +7,7 @@ import {
   updateAttendance,
 } from '../api/attendanceApi';
 import { Attendee, AttendanceStatus } from '../types';
+import { SyncNoticeDetails } from '../utils/formatSyncNotice';
 
 export type AttendanceLoadStatus = 'loading' | 'success' | 'error';
 
@@ -15,8 +16,8 @@ export interface UseAttendanceResult {
   attendees: Attendee[];
   errorMessage: string | null;
   pendingMemberIds: ReadonlySet<number>;
-  /** Rows reconciled from a 409 — show a soft inline "synced elsewhere" hint. */
-  syncNoticeMemberIds: ReadonlySet<number>;
+  /** Other staff's write snapshot per row, shown after a 409 conflict. */
+  syncNotices: ReadonlyMap<number, SyncNoticeDetails>;
   isMarkingAllPresent: boolean;
   isMarkingAllAbsent: boolean;
   isRefreshing: boolean;
@@ -26,6 +27,7 @@ export interface UseAttendanceResult {
   retry: () => void;
   refreshRoster: () => void;
   toggleAttendee: (memberId: number) => void;
+  dismissSyncNotice: (memberId: number) => void;
   markAllPresent: () => void;
   markAllAbsent: () => void;
 }
@@ -52,7 +54,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
   // silently — see `checkForRosterUpdates` — the user pulls to refresh to
   // bring it in explicitly.
   const [hasRosterUpdates, setHasRosterUpdates] = useState(false);
-  const [syncNoticeMemberIds, setSyncNoticeMemberIds] = useState<Set<number>>(new Set());
+  const [syncNotices, setSyncNotices] = useState<Map<number, SyncNoticeDetails>>(new Map());
 
   // Mirror `attendees`/`pendingMemberIds`, but readable synchronously (not
   // via a stale closure) from background callbacks like
@@ -73,25 +75,25 @@ export function useAttendance(classId: number): UseAttendanceResult {
   );
 
   const clearSyncNotice = useCallback((memberId: number) => {
-    setSyncNoticeMemberIds((current) => {
+    setSyncNotices((current) => {
       if (!current.has(memberId)) {
         return current;
       }
-      const next = new Set(current);
+      const next = new Map(current);
       next.delete(memberId);
       return next;
     });
   }, []);
 
-  const showSyncNotice = useCallback((memberId: number) => {
-    setSyncNoticeMemberIds((current) => new Set(current).add(memberId));
+  const showSyncNotice = useCallback((memberId: number, details: SyncNoticeDetails) => {
+    setSyncNotices((current) => new Map(current).set(memberId, details));
   }, []);
 
   const load = useCallback(() => {
     setStatus('loading');
     setErrorMessage(null);
     setHasRosterUpdates(false);
-    setSyncNoticeMemberIds(new Set());
+    setSyncNotices(new Map());
 
     getAttendees(classId)
       .then((data) => {
@@ -134,8 +136,13 @@ export function useAttendance(classId: number): UseAttendanceResult {
    * user decide when to pull to refresh, instead of rows jumping around
    * underneath them. `excludeMemberId` is the row this client just wrote
    * itself (already applied from the API response) and any row with a save
-   * currently in flight is skipped too, since a stale-looking version there
-   * just means our own write hasn't landed yet.
+   * currently in flight is skipped too, since its local status doesn't
+   * reflect the write yet.
+   *
+   * We compare attendance status rather than `version`: the version bumps
+   * on every write, but what the user actually cares about is whether
+   * someone else's change would flip a row's present/absent state on their
+   * screen.
    */
   const checkForRosterUpdates = useCallback(
     (excludeMemberId: number): void => {
@@ -149,7 +156,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
               return false;
             }
             const local = attendeesRef.current.find((attendee) => attendee.member.id === fresh.member.id);
-            return local === undefined || local.version !== fresh.version;
+            return local === undefined || local.status !== fresh.status;
           });
 
           if (somethingElseChanged) {
@@ -182,7 +189,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
           ),
         );
         setHasRosterUpdates(false);
-        setSyncNoticeMemberIds(new Set());
+        setSyncNotices(new Map());
       })
       .catch((error: unknown) => {
         notify("Couldn't refresh", error instanceof Error ? error.message : 'Please try again.');
@@ -230,19 +237,25 @@ export function useAttendance(classId: number): UseAttendanceResult {
         .catch((error: unknown) => {
           if (error instanceof AttendanceConflictError) {
             // Someone else already updated this row first — reconcile to the
-            // server's version immediately. Only surface the inline hint when
-            // the server state differs from what this staff member was trying
-            // to set; if another staff member already landed the same status,
-            // treat it as a silent sync (same outcome, stale version only).
-            applyAttendees((current) =>
-              current.map((attendee) => (attendee.member.id === memberId ? error.fresh : attendee)),
-            );
-            removePending(memberId);
-            if (nextStatus !== error.fresh.status) {
-              showSyncNotice(memberId);
-            }
-            checkForRosterUpdates(memberId);
-            return;
+            // server's version immediately. Always surface the inline hint:
+            // another staff member's write already landed on this row before
+            // ours, so this staff member's own tap was silently overwritten —
+            // that's true regardless of whether the resulting status happens
+            // to match what they were trying to set.
+            
+            updateAttendance(classId, memberId, nextStatus, error.fresh.version)
+              .then((updated) => {
+                applyAttendees((current) =>
+                  current.map((attendee) => (attendee.member.id === memberId ? updated : attendee)),
+                );
+              })
+              removePending(memberId);
+              // if (nextStatus !== error.fresh.status) {
+              //   showSyncNotice(memberId, error.fresh);
+              // }.
+              showSyncNotice(memberId, error.fresh);
+              checkForRosterUpdates(memberId);
+            return
           }
 
           // Any other failure: roll back the optimistic change.
@@ -286,6 +299,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
                 status,
                 version: attendee.version + 1,
                 markedAt: status === 'attended' ? new Date().toISOString() : null,
+                updatedAt: new Date().toISOString(),
               };
             }),
           );
@@ -311,7 +325,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
     attendees,
     errorMessage,
     pendingMemberIds,
-    syncNoticeMemberIds,
+    syncNotices,
     isMarkingAllPresent: markingAllStatus === 'attended',
     isMarkingAllAbsent: markingAllStatus === 'not_attended',
     isRefreshing,
@@ -321,6 +335,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
     retry: load,
     refreshRoster,
     toggleAttendee,
+    dismissSyncNotice: clearSyncNotice,
     markAllPresent,
     markAllAbsent,
   };
