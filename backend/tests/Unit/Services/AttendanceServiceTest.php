@@ -185,7 +185,7 @@ class AttendanceServiceTest extends TestCase
         );
     }
 
-    public function test_mark_all_attendance_increments_version_for_every_row(): void
+    public function test_mark_all_attendance_increments_version_for_every_changed_row(): void
     {
         $gym = Gym::factory()->create();
         $class = FitnessClass::factory()->for($gym)->create();
@@ -207,6 +207,39 @@ class AttendanceServiceTest extends TestCase
         $this->assertEquals(
             3,
             $class->attendances()->where('version', 2)->count()
+        );
+    }
+
+    public function test_mark_all_attendance_does_not_increment_version_for_rows_already_matching_status(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+        [$alreadyAbsent, $needsUpdate] = Member::factory()->count(2)->for($gym)->create();
+
+        Attendance::factory()
+            ->for($class)
+            ->for($alreadyAbsent)
+            ->notAttended()
+            ->create(['version' => 7]);
+
+        Attendance::factory()
+            ->for($class)
+            ->for($needsUpdate)
+            ->attended()
+            ->create(['version' => 3]);
+
+        $service = new AttendanceService();
+
+        $updated = $service->markAllAttendance($class, AttendanceStatus::NotAttended);
+
+        $this->assertEquals(1, $updated);
+        $this->assertEquals(
+            7,
+            $class->attendances()->where('member_id', $alreadyAbsent->id)->firstOrFail()->version
+        );
+        $this->assertEquals(
+            4,
+            $class->attendances()->where('member_id', $needsUpdate->id)->firstOrFail()->version
         );
     }
 }
