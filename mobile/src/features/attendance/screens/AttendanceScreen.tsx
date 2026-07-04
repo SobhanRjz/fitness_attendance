@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { FlatList, Platform, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
+import { FlatList, Platform, RefreshControl, StatusBar as RNStatusBar, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../../theme/colors';
 import { AttendeeRow } from '../components/AttendeeRow';
@@ -8,6 +8,7 @@ import { RosterErrorState } from '../components/RosterErrorState';
 import { RosterSectionHeader } from '../components/RosterSectionHeader';
 import { RosterSkeleton } from '../components/RosterSkeleton';
 import { RosterTopBar, SaveState } from '../components/RosterTopBar';
+import { RosterUpdateBanner } from '../components/RosterUpdateBanner';
 import { useAttendance } from '../hooks/useAttendance';
 import { ClassInfo } from '../types';
 
@@ -28,9 +29,12 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
     pendingMemberIds,
     isMarkingAllPresent,
     isMarkingAllAbsent,
+    isRefreshing,
+    hasRosterUpdates,
     presentCount,
     totalCount,
     retry,
+    refreshRoster,
     toggleAttendee,
     markAllPresent,
     markAllAbsent,
@@ -77,8 +81,16 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
                 onToggle={() => toggleAttendee(item.member.id)}
               />
             )}
-            ListHeaderComponent={<RosterSectionHeader totalCount={totalCount} />}
+            ListHeaderComponent={
+              <>
+                <RosterSectionHeader totalCount={totalCount} />
+                {hasRosterUpdates && <RosterUpdateBanner onRefresh={refreshRoster} />}
+              </>
+            }
             contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={refreshRoster} tintColor={colors.accent} />
+            }
           />
         )}
       </SafeAreaView>
