@@ -70,6 +70,8 @@ describe('useAttendance', () => {
         resolveUpdate = resolve;
       }),
     );
+    // Background "did anything else change" check fired after the update succeeds.
+    mockedApi.getAttendees.mockResolvedValueOnce([makeAttendee({ status: 'attended', version: 2 })]);
 
     act(() => {
       result.current.toggleAttendee(10);
@@ -85,6 +87,65 @@ describe('useAttendance', () => {
 
     expect(result.current.attendees[0]?.version).toBe(2);
     expect(result.current.pendingMemberIds.has(10)).toBe(false);
+    expect(result.current.hasRosterUpdates).toBe(false);
+  });
+
+  it('flags that other rows changed elsewhere, without silently overwriting them, then applies them on refresh', async () => {
+    // Mirrors the "Staff A / Staff B" scenario: two other rows were already
+    // changed elsewhere by the time this staff member's screen updates row 2.
+    const rows = [
+      makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'not_attended', version: 1 }),
+      makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'not_attended', version: 1 }),
+      makeAttendee({ id: 3, member: { id: 12, name: 'Row Three' }, status: 'not_attended', version: 1 }),
+    ];
+    mockedApi.getAttendees.mockResolvedValueOnce(rows);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    mockedApi.updateAttendance.mockResolvedValueOnce(
+      makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'attended', version: 2 }),
+    );
+    // Rows 1 and 3 were bumped to version 2 by another staff member in the meantime.
+    const latestFromServer = [
+      makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'attended', version: 2 }),
+      makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'attended', version: 2 }),
+      makeAttendee({ id: 3, member: { id: 12, name: 'Row Three' }, status: 'attended', version: 2 }),
+    ];
+    mockedApi.getAttendees.mockResolvedValueOnce(latestFromServer);
+
+    await act(async () => {
+      result.current.toggleAttendee(11);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // Only the tapped row was sent to the backend.
+    expect(mockedApi.updateAttendance).toHaveBeenCalledTimes(1);
+    expect(mockedApi.updateAttendance).toHaveBeenCalledWith(1, 11, 'attended', 1);
+
+    // Row 2 was applied immediately from the API response...
+    expect(result.current.pendingMemberIds.has(11)).toBe(false);
+    expect(result.current.attendees.find((a) => a.member.id === 11)?.version).toBe(2);
+
+    // ...but rows 1 and 3 are NOT silently overwritten — the background check
+    // only raises a flag so the user can decide when to pull to refresh.
+    await waitFor(() => expect(result.current.hasRosterUpdates).toBe(true));
+    expect(result.current.attendees.find((a) => a.member.id === 10)?.version).toBe(1);
+    expect(result.current.attendees.find((a) => a.member.id === 12)?.version).toBe(1);
+
+    // Pulling to refresh brings the latest data in and clears the flag.
+    mockedApi.getAttendees.mockResolvedValueOnce(latestFromServer);
+    await act(async () => {
+      result.current.refreshRoster();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.hasRosterUpdates).toBe(false);
+    expect(result.current.attendees.every((attendee) => attendee.status === 'attended')).toBe(true);
+    expect(result.current.attendees.map((attendee) => attendee.version)).toEqual([2, 2, 2]);
   });
 
   it('rolls back the optimistic change when the save fails', async () => {
@@ -106,34 +167,40 @@ describe('useAttendance', () => {
     expect(result.current.pendingMemberIds.has(10)).toBe(false);
   });
 
-  it('reconciles to the server row and refreshes the whole roster on a 409 conflict', async () => {
-    const attendee = makeAttendee({ status: 'not_attended', version: 1 });
-    mockedApi.getAttendees.mockResolvedValueOnce([attendee]);
+  it('reconciles to the server row immediately on a 409 conflict, then flags other roster changes', async () => {
+    const rows = [
+      makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'not_attended', version: 1 }),
+      makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'not_attended', version: 1 }),
+    ];
+    mockedApi.getAttendees.mockResolvedValueOnce(rows);
 
     const { result } = renderHook(() => useAttendance(1));
     await waitFor(() => expect(result.current.status).toBe('success'));
 
-    const freshFromServer = makeAttendee({ status: 'attended', version: 5 });
+    const freshFromServer = makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'attended', version: 5 });
     mockedApi.updateAttendance.mockRejectedValueOnce(new AttendanceConflictError(freshFromServer));
-    // The hook re-syncs the full roster after a conflict, since other rows
-    // may also be stale (e.g. after a "mark all" from another staff member).
-    mockedApi.getAttendees.mockResolvedValueOnce([makeAttendee({ status: 'attended', version: 5 })]);
+    // Row 2 was also changed elsewhere in the meantime.
+    mockedApi.getAttendees.mockResolvedValueOnce([
+      freshFromServer,
+      makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'attended', version: 2 }),
+    ]);
 
     act(() => {
       result.current.toggleAttendee(10);
     });
 
-    // The row is reconciled to the server's version immediately...
+    // The conflicting row is reconciled to the server's version immediately,
+    // and freed up for the next tap right away — no waiting on a refetch.
     await waitFor(() => expect(result.current.attendees[0]?.version).toBe(5));
     expect(result.current.attendees[0]?.status).toBe('attended');
+    expect(result.current.pendingMemberIds.has(10)).toBe(false);
 
-    // ...but stays "pending" (un-tappable) until the roster refetch settles,
-    // so a follow-up tap can never go out with the stale version.
-    await waitFor(() => expect(result.current.pendingMemberIds.has(10)).toBe(false));
-    expect(mockedApi.getAttendees).toHaveBeenCalledTimes(2);
+    // The other row is NOT silently overwritten — only flagged.
+    await waitFor(() => expect(result.current.hasRosterUpdates).toBe(true));
+    expect(result.current.attendees[1]?.version).toBe(1);
   });
 
-  it('keeps the reconciled row if the post-conflict refresh itself fails', async () => {
+  it('does not raise a false "updates available" flag if the post-conflict background check fails', async () => {
     const attendee = makeAttendee({ status: 'not_attended', version: 1 });
     mockedApi.getAttendees.mockResolvedValueOnce([attendee]);
 
@@ -151,6 +218,26 @@ describe('useAttendance', () => {
     await waitFor(() => expect(result.current.pendingMemberIds.has(10)).toBe(false));
     expect(result.current.attendees[0]?.version).toBe(5);
     expect(result.current.attendees[0]?.status).toBe('attended');
+    expect(result.current.hasRosterUpdates).toBe(false);
+  });
+
+  it('refreshRoster surfaces an error and stops refreshing if the fetch fails', async () => {
+    const attendee = makeAttendee({ status: 'not_attended', version: 1 });
+    mockedApi.getAttendees.mockResolvedValueOnce([attendee]);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    mockedApi.getAttendees.mockRejectedValueOnce(new Error('offline'));
+
+    await act(async () => {
+      result.current.refreshRoster();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.isRefreshing).toBe(false);
+    expect(result.current.attendees[0]?.version).toBe(1);
   });
 
   it('marks every attendee present and bumps each version by one', async () => {
