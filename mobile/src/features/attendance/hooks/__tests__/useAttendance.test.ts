@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { AttendanceConflictError } from '../../api/attendanceApi';
 import * as attendanceApi from '../../api/attendanceApi';
+import * as alert from '../../../../shared/alert';
 import { Attendee } from '../../types';
 import { useAttendance } from '../useAttendance';
 
@@ -13,7 +14,12 @@ jest.mock('../../api/attendanceApi', () => ({
   markAllAttendance: jest.fn(),
 }));
 
+jest.mock('../../../../shared/alert', () => ({
+  notify: jest.fn(),
+}));
+
 const mockedApi = attendanceApi as jest.Mocked<typeof attendanceApi>;
+const mockedNotify = alert.notify as jest.Mock;
 
 function makeAttendee(overrides: Partial<Attendee> = {}): Attendee {
   return {
@@ -167,7 +173,31 @@ describe('useAttendance', () => {
     expect(result.current.pendingMemberIds.has(10)).toBe(false);
   });
 
-  it('reconciles to the server row immediately on a 409 conflict, then flags other roster changes', async () => {
+  it('reconciles silently on a 409 when the server already has the intended status', async () => {
+    const attendee = makeAttendee({ status: 'not_attended', version: 1 });
+    mockedApi.getAttendees.mockResolvedValueOnce([attendee]);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    // Staff B toggles to present; Staff A already set present on the server.
+    const freshFromServer = makeAttendee({ status: 'attended', version: 5 });
+    mockedApi.updateAttendance.mockRejectedValueOnce(new AttendanceConflictError(freshFromServer));
+    mockedApi.getAttendees.mockResolvedValueOnce([freshFromServer]);
+
+    await act(async () => {
+      result.current.toggleAttendee(10);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.attendees[0]?.version).toBe(5));
+    expect(result.current.attendees[0]?.status).toBe('attended');
+    expect(result.current.syncNoticeMemberIds.has(10)).toBe(false);
+    expect(mockedNotify).not.toHaveBeenCalled();
+  });
+
+  it('reconciles on a 409 and shows an inline sync hint only when the server status differs from intent', async () => {
     const rows = [
       makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'not_attended', version: 1 }),
       makeAttendee({ id: 2, member: { id: 11, name: 'Row Two' }, status: 'not_attended', version: 1 }),
@@ -177,7 +207,8 @@ describe('useAttendance', () => {
     const { result } = renderHook(() => useAttendance(1));
     await waitFor(() => expect(result.current.status).toBe('success'));
 
-    const freshFromServer = makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'attended', version: 5 });
+    // Staff B toggles to present; server still has absent (another staff changed something else).
+    const freshFromServer = makeAttendee({ id: 1, member: { id: 10, name: 'Row One' }, status: 'not_attended', version: 5 });
     mockedApi.updateAttendance.mockRejectedValueOnce(new AttendanceConflictError(freshFromServer));
     // Row 2 was also changed elsewhere in the meantime.
     mockedApi.getAttendees.mockResolvedValueOnce([
@@ -192,12 +223,43 @@ describe('useAttendance', () => {
     // The conflicting row is reconciled to the server's version immediately,
     // and freed up for the next tap right away — no waiting on a refetch.
     await waitFor(() => expect(result.current.attendees[0]?.version).toBe(5));
-    expect(result.current.attendees[0]?.status).toBe('attended');
+    expect(result.current.attendees[0]?.status).toBe('not_attended');
     expect(result.current.pendingMemberIds.has(10)).toBe(false);
+    expect(result.current.syncNoticeMemberIds.has(10)).toBe(true);
+    expect(mockedNotify).not.toHaveBeenCalled();
 
     // The other row is NOT silently overwritten — only flagged.
     await waitFor(() => expect(result.current.hasRosterUpdates).toBe(true));
     expect(result.current.attendees[1]?.version).toBe(1);
+  });
+
+  it('clears the inline sync hint when the user taps the row again', async () => {
+    const attendee = makeAttendee({ status: 'not_attended', version: 1 });
+    mockedApi.getAttendees.mockResolvedValueOnce([attendee]);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    const freshFromServer = makeAttendee({ status: 'not_attended', version: 5 });
+    mockedApi.updateAttendance.mockRejectedValueOnce(new AttendanceConflictError(freshFromServer));
+    mockedApi.getAttendees.mockResolvedValueOnce([freshFromServer]);
+
+    await act(async () => {
+      result.current.toggleAttendee(10);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.syncNoticeMemberIds.has(10)).toBe(true));
+
+    mockedApi.updateAttendance.mockResolvedValueOnce(makeAttendee({ status: 'not_attended', version: 6 }));
+    mockedApi.getAttendees.mockResolvedValueOnce([makeAttendee({ status: 'not_attended', version: 6 })]);
+
+    act(() => {
+      result.current.toggleAttendee(10);
+    });
+
+    expect(result.current.syncNoticeMemberIds.has(10)).toBe(false);
   });
 
   it('does not raise a false "updates available" flag if the post-conflict background check fails', async () => {
@@ -263,6 +325,39 @@ describe('useAttendance', () => {
     expect(result.current.attendees[1]?.version).toBe(4);
   });
 
+  it('does not bump local versions for rows already matching a bulk present update', async () => {
+    const markedAt = '2024-01-01T00:00:00.000Z';
+    const attendees = [
+      makeAttendee({
+        id: 1,
+        member: { id: 10, name: 'Already Present' },
+        status: 'attended',
+        version: 7,
+        markedAt,
+      }),
+      makeAttendee({ id: 2, member: { id: 11, name: 'Needs Update' }, status: 'not_attended', version: 3 }),
+    ];
+    mockedApi.getAttendees.mockResolvedValueOnce(attendees);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    mockedApi.markAllAttendance.mockResolvedValueOnce({ updated: 1, status: 'attended' });
+
+    await act(async () => {
+      result.current.markAllPresent();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.attendees[0]?.status).toBe('attended');
+    expect(result.current.attendees[0]?.version).toBe(7);
+    expect(result.current.attendees[0]?.markedAt).toBe(markedAt);
+    expect(result.current.attendees[1]?.status).toBe('attended');
+    expect(result.current.attendees[1]?.version).toBe(4);
+    expect(result.current.attendees[1]?.markedAt).not.toBe(null);
+  });
+
   it('marks every attendee absent, bumps each version, and clears markedAt', async () => {
     const attendees = [
       makeAttendee({
@@ -298,6 +393,37 @@ describe('useAttendance', () => {
     expect(result.current.attendees.every((a) => a.markedAt === null)).toBe(true);
     expect(result.current.attendees[0]?.version).toBe(2);
     expect(result.current.attendees[1]?.version).toBe(4);
+  });
+
+  it('does not bump local versions for rows already matching a bulk absent update', async () => {
+    const attendees = [
+      makeAttendee({ id: 1, member: { id: 10, name: 'Already Absent' }, status: 'not_attended', version: 7 }),
+      makeAttendee({
+        id: 2,
+        member: { id: 11, name: 'Needs Update' },
+        status: 'attended',
+        version: 3,
+        markedAt: '2024-01-01T00:00:00.000Z',
+      }),
+    ];
+    mockedApi.getAttendees.mockResolvedValueOnce(attendees);
+
+    const { result } = renderHook(() => useAttendance(1));
+    await waitFor(() => expect(result.current.status).toBe('success'));
+
+    mockedApi.markAllAttendance.mockResolvedValueOnce({ updated: 1, status: 'not_attended' });
+
+    await act(async () => {
+      result.current.markAllAbsent();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.attendees[0]?.status).toBe('not_attended');
+    expect(result.current.attendees[0]?.version).toBe(7);
+    expect(result.current.attendees[1]?.status).toBe('not_attended');
+    expect(result.current.attendees[1]?.version).toBe(4);
+    expect(result.current.attendees[1]?.markedAt).toBe(null);
   });
 
   it('rolls back to loading state and surfaces an alert when marking all absent fails', async () => {
