@@ -29,6 +29,8 @@ class AttendeeResource extends JsonResource
             'version' => $this->version,
             // ISO-8601 so the client can parse it in any timezone; null when unmarked.
             'marked_at' => $this->marked_at?->toIso8601String(),
+            // Last write time — used when marked_at is cleared (e.g. marked absent).
+            'updated_at' => $this->updated_at->toIso8601String(),
         ];
     }
 }
