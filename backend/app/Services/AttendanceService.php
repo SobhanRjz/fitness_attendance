@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\AttendanceStatus;
 use App\Exceptions\AttendanceConflictException;
+use App\Exceptions\AttendanceRemovedException;
 use App\Models\Attendance;
 use App\Models\FitnessClass;
 use App\Models\Member;
@@ -63,7 +64,12 @@ class AttendanceService
             throw new AttendanceConflictException($attendance->fresh());
         }
 
-        return $attendance->fresh();
+        $fresh = $attendance->fresh();
+        if ($fresh === null) {
+            throw new AttendanceRemovedException();
+        }
+
+        return $fresh;
     }
 
     /**
@@ -73,12 +79,25 @@ class AttendanceService
      */
     public function markAllAttendance(FitnessClass $class, AttendanceStatus $status): int
     {
-        return $class->attendances()->update([
-            'status' => $status,
-            'marked_at' => $this->markedAtFor($status),
-            'version' => DB::raw('version + 1'),
-            'updated_at' => now(),
-        ]);
+        if ($status === AttendanceStatus::NotAttended) {
+            return $class->attendances()
+                ->where('status', '!=', AttendanceStatus::NotAttended)
+                ->update([
+                    'status' => $status,
+                    'marked_at' => null,
+                    'version' => DB::raw('version + 1'),
+                    'updated_at' => now(),
+                ]);
+        }
+    
+        return $class->attendances()
+            ->where('status', '!=', AttendanceStatus::Attended)
+            ->update([
+                'status' => $status,
+                'marked_at' => now(),
+                'version' => DB::raw('version + 1'),
+                'updated_at' => now(),
+            ]);
     }
 
     private function markedAtFor(AttendanceStatus $status): ?\DateTimeInterface
