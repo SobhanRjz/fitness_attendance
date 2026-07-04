@@ -86,6 +86,44 @@ class BulkUpdateAttendanceTest extends TestCase
         );
     }
 
+    public function test_bulk_mark_attended_does_not_overwrite_an_existing_check_in_time(): void
+    {
+        $gym = Gym::factory()->create();
+        $class = FitnessClass::factory()->for($gym)->create();
+
+        [$alreadyIn, $straggler] = Member::factory()->count(2)->for($gym)->create();
+
+        // Checked in ten minutes ago by front-desk staff scanning them individually.
+        // (Truncated to whole seconds since that's the precision the DB column stores.)
+        $earlierCheckIn = now()->subMinutes(10)->startOfSecond();
+        Attendance::factory()
+            ->for($class)->for($alreadyIn)
+            ->attended()
+            ->create(['marked_at' => $earlierCheckIn]);
+
+        Attendance::factory()
+            ->for($class)->for($straggler)
+            ->notAttended()
+            ->create();
+
+        // Staff clicks "mark all attended" to sweep up the stragglers.
+        $this->travel(5)->minutes();
+        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+            'status' => AttendanceStatus::Attended->value,
+        ]);
+
+        $response->assertOk();
+
+        // The straggler gets a fresh timestamp...
+        $stragglerAttendance = Attendance::where('member_id', $straggler->id)->firstOrFail();
+        $this->assertEquals(AttendanceStatus::Attended, $stragglerAttendance->status);
+        $this->assertFalse($stragglerAttendance->marked_at->equalTo($earlierCheckIn));
+
+        // ...but the attendee who already checked in keeps their real check-in time.
+        $alreadyInAttendance = Attendance::where('member_id', $alreadyIn->id)->firstOrFail();
+        $this->assertTrue($alreadyInAttendance->marked_at->equalTo($earlierCheckIn));
+    }
+
     public function test_bulk_update_validates_status(): void
     {
         $class = FitnessClass::factory()->create();
