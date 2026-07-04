@@ -60,13 +60,17 @@ class AttendanceService
                 'version' => $expectedVersion + 1,
             ]);
 
-        if ($updated === 0) {
-            throw new AttendanceConflictException($attendance->fresh());
-        }
-
+        // Re-fetch once and branch on it: a null row means someone deleted this
+        // attendee's enrollment between our lookup and the write (404), which is
+        // a different failure than "someone else changed the status" (409).
         $fresh = $attendance->fresh();
+
         if ($fresh === null) {
             throw new AttendanceRemovedException();
+        }
+
+        if ($updated === 0) {
+            throw new AttendanceConflictException($fresh);
         }
 
         return $fresh;
@@ -89,7 +93,7 @@ class AttendanceService
                     'updated_at' => now(),
                 ]);
         }
-    
+
         return $class->attendances()
             ->where('status', '!=', AttendanceStatus::Attended)
             ->update([
