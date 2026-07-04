@@ -13,6 +13,7 @@ interface RawAttendee {
   status: AttendanceStatus;
   version: number;
   marked_at: string | null;
+  updated_at: string;
 }
 
 interface RawAttendeeCollectionResponse {
@@ -40,6 +41,7 @@ function toAttendee(raw: RawAttendee): Attendee {
     status: raw.status,
     version: raw.version,
     markedAt: raw.marked_at,
+    updatedAt: raw.updated_at,
   };
 }
 
