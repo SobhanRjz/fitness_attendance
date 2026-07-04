@@ -37,7 +37,7 @@ export const colors = {
   divider: '#ECECF0',
 
   /** Soft inline hint when a row was reconciled from a 409 conflict. */
-  syncNoticeText: '#EB5C8D',
+  syncNoticeText: '#C98BA8',
   syncNoticeHint: '#C98BA8',
 } as const;
 
