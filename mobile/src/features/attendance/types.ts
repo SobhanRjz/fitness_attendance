@@ -11,6 +11,7 @@ export interface Attendee {
   status: AttendanceStatus;
   version: number;
   markedAt: string | null;
+  updatedAt: string;
 }
 
 /**
