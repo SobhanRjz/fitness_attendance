@@ -196,6 +196,6 @@ class UpdateAttendanceTest extends TestCase
             ->assertJsonPath('data.member.id', $member->id)
             ->assertJsonPath('data.status', AttendanceStatus::Attended->value)
             ->assertJsonPath('data.version', 2)
-            ->assertJsonStructure(['message', 'data' => ['id', 'member', 'status', 'version', 'marked_at']]);
+            ->assertJsonStructure(['message', 'data' => ['id', 'member', 'status', 'version', 'marked_at', 'updated_at']]);
     }
 }
