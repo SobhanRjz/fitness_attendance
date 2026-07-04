@@ -27,6 +27,7 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
     attendees,
     errorMessage,
     pendingMemberIds,
+    syncNoticeMemberIds,
     isMarkingAllPresent,
     isMarkingAllAbsent,
     isRefreshing,
@@ -78,15 +79,17 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
               <AttendeeRow
                 attendee={item}
                 pending={pendingMemberIds.has(item.member.id)}
+                showSyncNotice={syncNoticeMemberIds.has(item.member.id)}
                 onToggle={() => toggleAttendee(item.member.id)}
               />
             )}
             ListHeaderComponent={
-              <>
+              <View style={styles.listHeader}>
                 <RosterSectionHeader totalCount={totalCount} />
                 {hasRosterUpdates && <RosterUpdateBanner onRefresh={refreshRoster} />}
-              </>
+              </View>
             }
+            stickyHeaderIndices={[0]}
             contentContainerStyle={styles.listContent}
             refreshControl={
               <RefreshControl refreshing={isRefreshing} onRefresh={refreshRoster} tintColor={colors.accent} />
@@ -116,5 +119,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 24,
+  },
+  listHeader: {
+    backgroundColor: colors.surface,
   },
 });
