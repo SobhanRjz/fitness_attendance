@@ -35,6 +35,10 @@ export const colors = {
   errorIconColor: '#E0685F',
 
   divider: '#ECECF0',
+
+  /** Soft inline hint when a row was reconciled from a 409 conflict. */
+  syncNoticeText: '#EB5C8D',
+  syncNoticeHint: '#C98BA8',
 } as const;
 
 /** Fixed palette for deterministic avatar background colors. */
