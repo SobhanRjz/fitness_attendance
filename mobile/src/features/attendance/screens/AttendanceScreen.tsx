@@ -27,7 +27,7 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
     attendees,
     errorMessage,
     pendingMemberIds,
-    syncNoticeMemberIds,
+    syncNotices,
     isMarkingAllPresent,
     isMarkingAllAbsent,
     isRefreshing,
@@ -37,6 +37,7 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
     retry,
     refreshRoster,
     toggleAttendee,
+    dismissSyncNotice,
     markAllPresent,
     markAllAbsent,
   } = useAttendance(classId);
@@ -79,7 +80,8 @@ export function AttendanceScreen({ classId, classInfo }: AttendanceScreenProps) 
               <AttendeeRow
                 attendee={item}
                 pending={pendingMemberIds.has(item.member.id)}
-                showSyncNotice={syncNoticeMemberIds.has(item.member.id)}
+                syncNotice={syncNotices.get(item.member.id) ?? null}
+                onSyncNoticeDismiss={() => dismissSyncNotice(item.member.id)}
                 onToggle={() => toggleAttendee(item.member.id)}
               />
             )}
