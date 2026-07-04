@@ -3,16 +3,25 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../../theme/colors';
 import { Attendee } from '../types';
 import { getAvatarColor, getInitials } from '../utils/avatar';
+import { AnimatedSyncNotice } from './AnimatedSyncNotice';
+import { SyncNoticeDetails, formatSyncNotice } from '../utils/formatSyncNotice';
 import { getMembershipType } from '../utils/membership';
 
 interface AttendeeRowProps {
   attendee: Attendee;
   pending: boolean;
-  showSyncNotice: boolean;
+  syncNotice: SyncNoticeDetails | null;
+  onSyncNoticeDismiss: () => void;
   onToggle: () => void;
 }
 
-export function AttendeeRow({ attendee, pending, showSyncNotice, onToggle }: AttendeeRowProps) {
+export function AttendeeRow({
+  attendee,
+  pending,
+  syncNotice,
+  onSyncNoticeDismiss,
+  onToggle,
+}: AttendeeRowProps) {
   const isPresent = attendee.status === 'attended';
 
   return (
@@ -26,12 +35,11 @@ export function AttendeeRow({ attendee, pending, showSyncNotice, onToggle }: Att
           {attendee.member.name}
         </Text>
         <Text style={styles.membership}>{getMembershipType(attendee.member.id)}</Text>
-        {showSyncNotice && (
-          <View style={styles.syncNotice}>
-            <Text style={styles.syncNoticeText}>Updated by another staff member</Text>
-            <Text style={styles.syncNoticeHint}>Tap again to change</Text>
-          </View>
-        )}
+        <AnimatedSyncNotice
+          visible={syncNotice !== null}
+          message={syncNotice ? formatSyncNotice(syncNotice) : ''}
+          onDismiss={onSyncNoticeDismiss}
+        />
       </View>
 
       <Pressable
@@ -87,19 +95,6 @@ const styles = StyleSheet.create({
   membership: {
     color: colors.textSecondary,
     fontSize: 12,
-  },
-  syncNotice: {
-    marginTop: 4,
-    gap: 1,
-  },
-  syncNoticeText: {
-    color: colors.syncNoticeText,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  syncNoticeHint: {
-    color: colors.syncNoticeHint,
-    fontSize: 11,
   },
   statusPill: {
     flexDirection: 'row',
