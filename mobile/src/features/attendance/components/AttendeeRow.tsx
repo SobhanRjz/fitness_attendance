@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../../theme/colors';
 import { Attendee } from '../types';
 import { getAvatarColor, getInitials } from '../utils/avatar';
@@ -8,10 +8,11 @@ import { getMembershipType } from '../utils/membership';
 interface AttendeeRowProps {
   attendee: Attendee;
   pending: boolean;
+  showSyncNotice: boolean;
   onToggle: () => void;
 }
 
-export function AttendeeRow({ attendee, pending, onToggle }: AttendeeRowProps) {
+export function AttendeeRow({ attendee, pending, showSyncNotice, onToggle }: AttendeeRowProps) {
   const isPresent = attendee.status === 'attended';
 
   return (
@@ -25,23 +26,28 @@ export function AttendeeRow({ attendee, pending, onToggle }: AttendeeRowProps) {
           {attendee.member.name}
         </Text>
         <Text style={styles.membership}>{getMembershipType(attendee.member.id)}</Text>
+        {showSyncNotice && (
+          <View style={styles.syncNotice}>
+            <Text style={styles.syncNoticeText}>Updated by another staff member</Text>
+            <Text style={styles.syncNoticeHint}>Tap again to change</Text>
+          </View>
+        )}
       </View>
 
       <Pressable
         onPress={onToggle}
         disabled={pending}
-        style={[styles.statusPill, isPresent ? styles.statusPillPresent : styles.statusPillAbsent]}
+        style={[
+          styles.statusPill,
+          isPresent ? styles.statusPillPresent : styles.statusPillAbsent,
+          pending && styles.statusPillPending,
+        ]}
       >
-        {pending ? (
-          <ActivityIndicator size="small" color={isPresent ? colors.presentPillText : colors.absentPillText} />
-        ) : (
-          <>
-            {isPresent && <Ionicons name="checkmark" size={14} color={colors.presentPillText} />}
-            <Text style={isPresent ? styles.statusTextPresent : styles.statusTextAbsent}>
-              {isPresent ? 'Present' : 'Absent'}
-            </Text>
-          </>
-        )}
+        {isPresent && <Ionicons name="checkmark" size={14} color={colors.presentPillText} />}
+        <Text style={isPresent ? styles.statusTextPresent : styles.statusTextAbsent}>
+          {isPresent ? 'Present' : 'Absent'}
+        </Text>
+        {pending && <View style={styles.savingDot} />}
       </Pressable>
     </View>
   );
@@ -82,6 +88,19 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
   },
+  syncNotice: {
+    marginTop: 4,
+    gap: 1,
+  },
+  syncNoticeText: {
+    color: colors.syncNoticeText,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  syncNoticeHint: {
+    color: colors.syncNoticeHint,
+    fontSize: 11,
+  },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,6 +116,16 @@ const styles = StyleSheet.create({
   },
   statusPillAbsent: {
     backgroundColor: colors.absentPillBackground,
+  },
+  statusPillPending: {
+    opacity: 0.6,
+  },
+  savingDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.savingDot,
+    marginLeft: 2,
   },
   statusTextPresent: {
     color: colors.presentPillText,
