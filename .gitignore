@@ -1,0 +1,8 @@
+# OS / editor noise at repo root
+.DS_Store
+Thumbs.db
+# Local secrets (per-app .gitignore files cover backend/, mobile/, infra/)
+.env
+.env.*
+!.env.example
+!.env.*.example
