@@ -1,0 +1,84 @@
+name: fitness-attendance-dev
+
+# Local development stack: Postgres + the Laravel API served via `php artisan
+# serve`, with backend/ bind-mounted for live reload. Not meant for production.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-fitness_attendance}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in infra/.env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      # Exposed to the host for local DB tools only — dev convenience, not for prod.
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-fitness_attendance}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/docker/backend/Dockerfile
+      target: dev
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-Fitness Attendance}
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: ${APP_KEY:?set APP_KEY in infra/.env, e.g. php artisan key:generate --show}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: stack
+      LOG_LEVEL: debug
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-fitness_attendance}
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in infra/.env}
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+    volumes:
+      - ../backend:/var/www/html
+      # Named volume so container-installed vendor/ isn't clobbered by the host
+      # bind mount (and isn't a Windows/Linux binary mismatch).
+      - backend_vendor:/var/www/html/vendor
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+  # Expo web dev server only — for iOS/Android simulators or a physical
+  # device via Expo Go, use `npm start` on the host instead (see root README),
+  # since that needs LAN/USB access Docker doesn't give a container.
+  mobile:
+    build:
+      context: ..
+      dockerfile: infra/docker/mobile/Dockerfile
+      target: dev
+    restart: unless-stopped
+    environment:
+      EXPO_PUBLIC_API_URL: ${MOBILE_API_URL:-http://localhost:8000/api}
+    volumes:
+      - ../mobile:/app
+      - mobile_node_modules:/app/node_modules
+    ports:
+      - "${MOBILE_PORT:-8081}:8081"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  db_data:
+  backend_vendor:
+  mobile_node_modules:
