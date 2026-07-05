@@ -4,8 +4,9 @@ A Laravel REST API + React Native screen for gyms to manage class attendance: li
 attendees, toggle one attendee, or toggle the whole class — safely, even with multiple
 staff editing the same class at once.
 
-> **Status:** Backend is fully implemented and tested. The React Native attendance
-> roster screen is implemented and connected to it.
+> **Status:** Backend and React Native attendance roster are implemented, tested, and
+> connected. Additional work (Docker, CI, API versioning, `attendance_events` audit
+> table, and more) lives on the `develop` branch.
 
 ## Contents
 
@@ -38,7 +39,7 @@ staff editing the same class at once.
 
 ### Prerequisites
 
-- PHP 8.3+, Composer
+- PHP 8.4+, Composer
 - Node.js 18+, npm
 - Node.js 20+ if you want to run the mobile app on a device/simulator (Expo)
 
@@ -102,40 +103,15 @@ npm test
 
 ## Assumptions
 
-Reasonable assumptions made where the brief didn't specify:
+Where the brief was silent:
 
-1. **Lost updates are unacceptable; a** `409` **is better than silent data loss.** The
-  assignment explicitly calls out concurrent toggles, so this was treated as a hard
-   requirement, not an edge case. "Mark all" is the one intentional exception (see
-   [Design Decisions](#design-decisions)).
-
-2. **No auth layer** — the frontend spec says it's not required. `authorize()` in both
-  Form Requests returns `true` with a note on where access control would go.
-  
-3. **Multi-tenancy exists in the schema** (`Gym` owns `Member`/`FitnessClass`) but isn't
-  enforced at the API layer, since there's no authenticated staff user yet.
-4. `marked_at` reflects only the latest change (set when marked attended, cleared
-  when marked not-attended) — not a full history log. A real audit trail (who changed
-   what, when) would be a separate `attendance_events` table.
-5. **Members must already be enrolled** (have an attendance row) to be marked — the
-  update endpoint never creates one. Enrollment/booking is a separate concern.
-6. **PostgreSQL/MySQL are the intended production database.** SQLite is used for local
-  dev/tests for convenience only; the app's concurrency guarantees rely on real
-   row-level locking during the atomic `UPDATE ... WHERE version = ?`, which SQLite's
-   single-writer model doesn't meaningfully provide under concurrent load.
-7. **Mobile targets a single hardcoded class** (`DEMO_CLASS_ID` in
-  `mobile/src/features/attendance/constants.ts`) — there's no "list classes" screen in
-   the provided design, only one roster, so a class picker was treated as out of scope.
-8. **Class header content (name, time, duration, trainer) is static placeholder text**,
-  configured alongside `DEMO_CLASS_ID`. No endpoint returns this today — the closest is
-   `FitnessClass.name`/`start_time`, which aren't exposed via any API response — and
-   `trainer`/`duration` don't exist in the schema at all. Extending the backend for this
-   was scoped out in favor of keeping it untouched; the roster/counts/toggles below the
-   header are all live.
-9. **Membership badges** ("Unlimited" / "10 Pack" / "Drop-in") and **avatar colors**
-  are derived deterministically from `member.id`/`member.name` on the client
-   (`utils/membership.ts`, `utils/avatar.ts`) purely to match the design — there's no
-   membership-plan field in the schema, so these are cosmetic, not real data.
+1. **Database** — PostgreSQL in dev and production; concurrency relies on row-level locking during atomic `UPDATE ... WHERE version = ?`.
+2. **React Native (Expo)** — mobile app is built with Expo.
+3. **REST API** — no WebSockets; attendance sync uses HTTP requests only.
+4. **Concurrency** — conflicting toggles return `409`, not silent overwrites ("Mark all" is the exception; see [Design Decisions](#design-decisions)).
+5. **No auth** — per the frontend spec; Form Requests leave a hook for future access control.
+6. **Multi-tenancy** — `Gym` exists in the schema but isn't enforced without authenticated staff.
+7. **`marked_at`** — latest change only, not a full audit trail.
 
 
 
@@ -241,51 +217,32 @@ don't change), so an existing check-in time is never overwritten.
 
 ## Design Decisions
 
-The assignment calls out two constraints: **1000+ classes/day, 20+ attendees each**,
-and **simultaneous toggles by multiple staff**. Every decision below exists to serve
-one of those.
+Built for **high volume** (1000+ classes/day, 20+ attendees) and **concurrent staff
+edits**.
 
-
-| Decision                                                           | Why                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Optimistic locking via a** `version` **column** on `attendances` | Two staff can open the same class and tap the same row seconds apart. Row locks (`SELECT ... FOR UPDATE`) hold connections open across a request. Instead, each write is one atomic `UPDATE ... WHERE id = ? AND version = ?`. If a concurrent write already happened, 0 rows match → API returns `409` with fresh data instead of silently overwriting it. |
-
-
-| **Integer** `version`**, not** `updated_at` | Timestamps are only second-precision — two concurrent writes in the same second would collide and defeat the check. A counter can't collide. |
-
-| **"Mark all" skips version checks** | Requiring 20+ version numbers per bulk request (and failing the whole batch if one is stale) doesn't match staff intent. It's a deliberate overwrite — but it still bumps the version of every row it changes, so a stale single-row update sent afterward is still rejected. |
-
-| **Bulk update = one SQL statement** | `UPDATE ... WHERE fitness_class_id = ?` instead of 20+ per-row saves. Matters at 1000+ classes/day. |
-
-| **Bulk update skips no-op rows** | `WHERE status != <target>` — attendees already in the target status keep their original `marked_at` and `version`, so a bulk "mark all attended" can't silently erase someone's real check-in time. |
-
-| **Eager-load** `member` **when listing attendees** | Avoids N+1: one query for attendance rows, one for members, not 21. |
-
-| **Composite unique index** `(fitness_class_id, member_id)` | Enforces one attendance row per member per class at the DB level, and (since `fitness_class_id` leads) speeds up the main query: "all attendees for a class." |
-
-| **Update-only, never insert, on single-attendee toggle** | If a member isn't enrolled in the class, it 404s instead of silently creating a row — protects reporting/engagement metrics from bad data. |
-
-| `AttendanceStatus` **as a backed enum, not a boolean** | Leaves room for future states (`excused`, `no_show`, etc.) without a breaking migration. |
-
-| **Conflict handled as a custom exception, rendered centrally** | Keeps the controller's happy path clean; `409` responses carry the current row so the client can resync instantly. A separate `AttendanceRemovedException` (`404`) covers the rarer case where the row was deleted entirely between the read and the write. |
-
-| **Conflicts are surfaced to staff, not just resolved silently** | A `409` means someone else's write already happened — reconciling the row without telling the staff member risks them believing their own tap was the one that stuck. The client shows a brief, auto-dismissing inline notice on that row ("Previously updated at 10:15 AM by another staff to present") instead of silently swapping the value underneath their thumb. |
+| Decision | Why |
+| --- | --- |
+| **`version` column (optimistic locking)** | Atomic `UPDATE ... WHERE version = ?`; stale writes return `409` with fresh data. |
+| **Integer `version`, not `updated_at`** | Timestamps can collide within the same second. |
+| **"Mark all" skips version checks** | Deliberate bulk overwrite; still bumps versions so later stale single-row updates fail. |
+| **Bulk update in one SQL statement** | One `UPDATE` per class, not 20+ row-by-row saves. |
+| **Bulk skips no-op rows** | Rows already in the target status keep their `marked_at` and `version`. |
+| **Eager-load `member` on list** | Avoids N+1 queries. |
+| **Unique index** `(fitness_class_id, member_id)` | One row per member per class; fast roster lookups. |
+| **Single toggle = update only** | Unenrolled members get `404`, not a silent insert. |
+| **`AttendanceStatus` enum** | Room for future states (`excused`, `no_show`) without a breaking migration. |
+| **Central conflict exceptions** | `409`/`404` responses include the current row so the client can resync. |
+| **Surface conflicts to staff** | Per-row notice on `409` instead of silently swapping the value. |
 
 ## Frontend Notes
 
-The roster list, each member's present/absent status, the present/total counts, and
-"mark all present" are all driven by the real API
-(`GET`/`PATCH /classes/{class}/attendees`). Three pieces of the design have no backing
-endpoint or column yet and are static/derived client-side instead — see
-[Assumptions](#assumptions) above for why, and for the tradeoff considered.
+Roster, toggles, counts, and "mark all" use the live API (`GET`/`PATCH
+/classes/{class}/attendees`). Class header, badges, and avatar colors are static or
+client-derived — see [Assumptions](#assumptions).
 
-`useAttendance` covers loading/error states, optimistic single-attendee toggles with
-rollback on failure, `409` conflict reconciliation, and mark-all — with tests for each.
+`useAttendance` handles loading/errors, optimistic toggles with rollback, `409`
+reconciliation, and mark-all (all tested).
 
-On a `409`, the row is reconciled to the server's version and a per-row sync notice
-(`utils/formatSyncNotice.ts`, `components/AnimatedSyncNotice.tsx`) fades in for
-`SYNC_NOTICE_VISIBLE_MS` (10s) stating who won the race and when, then auto-dismisses —
-or dismisses immediately if the staff member toggles that row again. A separate,
-best-effort background check after every successful write (`checkForRosterUpdates`)
-flags via a banner when *other* rows changed elsewhere, without silently overwriting
-what's on screen; the staff member pulls to refresh to bring those in explicitly.
+On `409`, the row resyncs and a per-row notice shows who won the race, then
+auto-dismisses. After successful writes, a background check flags other changed rows
+via a banner; staff pull-to-refresh to load them.
