@@ -1,0 +1,47 @@
+# Docker build context is the repo root (see infra/docker/backend/Dockerfile) —
+# keep this lean so images stay small and secrets never end up in a layer.
+
+.git
+.github
+.vscode
+.idea
+
+# Mobile: dependencies and build output (installed/built fresh inside the image)
+mobile/node_modules
+mobile/.expo
+mobile/dist
+mobile/web-build
+mobile/ios
+mobile/android
+
+# Mobile: local runtime state / secrets — never bake these into an image
+mobile/.env
+mobile/.env.*
+!mobile/.env.example
+
+# Backend: dependencies and build output (installed fresh inside the image)
+backend/vendor
+backend/node_modules
+backend/public/build
+backend/public/hot
+
+# Backend: local runtime state / secrets — never bake these into an image
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/storage/*.key
+backend/storage/app/*
+!backend/storage/app/.gitignore
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/testing/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/database/*.sqlite
+
+# Infra secrets — compose reads these from the host, they must not be copied into an image
+infra/.env*
+!infra/*.env.example
+
+*.log
+.DS_Store
