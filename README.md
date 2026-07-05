@@ -11,6 +11,7 @@ staff editing the same class at once.
 
 - [Overview](#overview)
 - [Usage](#usage)
+- [Docker](#docker)
 - [Assumptions](#assumptions)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
@@ -100,6 +101,23 @@ npm test
 
 
 
+## Docker
+
+Both the backend (API + Postgres) and the mobile app's **web** target run
+containerized for dev and prod — see [`infra/README.md`](infra/README.md) for
+full details, including why native iOS/Android builds are out of scope for
+Docker. Quick start for dev:
+
+```bash
+cp infra/.env.dev.example infra/.env
+docker compose -f infra/docker-compose.dev.yml --env-file infra/.env up --build
+```
+
+For an iOS/Android simulator or a physical device via Expo Go, keep using the
+[Frontend](#frontend) instructions above instead of Docker.
+
+
+
 ## Assumptions
 
 Reasonable assumptions made where the brief didn't specify:
@@ -111,7 +129,7 @@ Reasonable assumptions made where the brief didn't specify:
 
 2. **No auth layer** — the frontend spec says it's not required. `authorize()` in both
   Form Requests returns `true` with a note on where access control would go.
-  
+
 3. **Multi-tenancy exists in the schema** (`Gym` owns `Member`/`FitnessClass`) but isn't
   enforced at the API layer, since there's no authenticated staff user yet.
 4. `marked_at` reflects only the latest change (set when marked attended, cleared
