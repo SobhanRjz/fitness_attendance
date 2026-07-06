@@ -26,7 +26,7 @@ class UpdateAttendanceTest extends TestCase
             ->notAttended()
             ->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
             'version' => $attendance->version,
         ]);
@@ -55,7 +55,7 @@ class UpdateAttendanceTest extends TestCase
             ->attended()
             ->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::NotAttended->value,
             'version' => $attendance->version,
         ]);
@@ -83,7 +83,7 @@ class UpdateAttendanceTest extends TestCase
             ->notAttended()
             ->create();
 
-        $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
             'version' => $attendance->version,
         ])->assertOk();
@@ -102,7 +102,7 @@ class UpdateAttendanceTest extends TestCase
             ->for($member)
             ->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", []);
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", []);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['status']);
@@ -119,7 +119,7 @@ class UpdateAttendanceTest extends TestCase
             ->for($member)
             ->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => 'present',
         ]);
 
@@ -133,7 +133,7 @@ class UpdateAttendanceTest extends TestCase
         $class = FitnessClass::factory()->for($gym)->create();
         $member = Member::factory()->for($gym)->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::Attended->value,
             'version' => 1,
         ]);
@@ -156,7 +156,7 @@ class UpdateAttendanceTest extends TestCase
         $attendance->update(['status' => AttendanceStatus::Attended, 'version' => 2]);
 
         // Staff B still has version 1 on screen and tries to write "not_attended".
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::NotAttended->value,
             'version' => 1,
         ]);
@@ -185,7 +185,7 @@ class UpdateAttendanceTest extends TestCase
         $attendance->update(['status' => AttendanceStatus::Attended, 'version' => 2]);
 
         // Staff B still has version 1 on screen.
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees/{$member->id}", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees/{$member->id}", [
             'status' => AttendanceStatus::NotAttended->value,
             'version' => 1,
         ]);
