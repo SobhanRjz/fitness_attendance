@@ -42,7 +42,7 @@ cp infra/.env.dev.example infra/.env
 docker compose -f infra/docker-compose.dev.yml --env-file infra/.env up --build -d
 ```
 
-- API: `http://localhost:8000/api`, matching the [root README](../README.md#backend)'s non-Docker instructions. Migrations run automatically on container start.
+- API: `http://localhost:8000/api/v1`, matching the [root README](../README.md#backend)'s non-Docker instructions. Migrations run automatically on container start.
 - Mobile web preview: `http://localhost:8081`.
 
 To run tests or artisan commands inside the backend container:
