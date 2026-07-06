@@ -26,7 +26,7 @@ class ListAttendanceTest extends TestCase
             ->notAttended()
             ->create();
 
-        $response = $this->getJson("/api/classes/{$class->id}/attendees");
+        $response = $this->getJson("/api/v1/classes/{$class->id}/attendees");
 
         $response->assertOk()
             ->assertJsonPath('data.0.member.id', $member->id)
@@ -38,7 +38,7 @@ class ListAttendanceTest extends TestCase
         $gym = Gym::factory()->create();
         $class = FitnessClass::factory()->for($gym)->create();
 
-        $response = $this->getJson("/api/classes/{$class->id}/attendees");
+        $response = $this->getJson("/api/v1/classes/{$class->id}/attendees");
 
         $response->assertOk()
             ->assertJsonPath('data', []);
@@ -46,7 +46,7 @@ class ListAttendanceTest extends TestCase
 
     public function test_returns_404_for_nonexistent_class(): void
     {
-        $response = $this->getJson('/api/classes/999999/attendees');
+        $response = $this->getJson('/api/v1/classes/999999/attendees');
 
         $response->assertNotFound();
     }
