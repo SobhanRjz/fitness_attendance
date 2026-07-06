@@ -18,13 +18,15 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::prefix('v1')->group(function () {
-    Route::prefix('classes/{class}')->group(function () {
-        // GET /api/v1/classes/{class}/attendees
-        Route::get('attendees', [AttendanceController::class, 'index']);
-        // PATCH /api/v1/classes/{class}/attendees
-        Route::patch('attendees', [AttendanceController::class, 'bulkUpdate']);
-        // PATCH /api/v1/classes/{class}/attendees/{member}
-        Route::patch('attendees/{member}', [AttendanceController::class, 'update']);
+Route::prefix('v1')
+    ->middleware('throttle.fixed')
+    ->group(function () {
+        Route::prefix('classes/{class}')->group(function () {
+            // GET /api/v1/classes/{class}/attendees
+            Route::get('attendees', [AttendanceController::class, 'index']);
+            // PATCH /api/v1/classes/{class}/attendees
+            Route::patch('attendees', [AttendanceController::class, 'bulkUpdate']);
+            // PATCH /api/v1/classes/{class}/attendees/{member}
+            Route::patch('attendees/{member}', [AttendanceController::class, 'update']);
+        });
     });
-});
