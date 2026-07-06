@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use App\Exceptions\AttendanceConflictException;
 use App\Exceptions\AttendanceRemovedException;
+use App\Http\Middleware\FixedWindowRateLimit;
 use App\Http\Resources\AttendeeResource;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -16,7 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'throttle.fixed' => FixedWindowRateLimit::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
