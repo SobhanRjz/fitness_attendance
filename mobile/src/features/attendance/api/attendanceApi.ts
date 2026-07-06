@@ -34,6 +34,10 @@ interface RawConflictResponse {
   data: RawAttendee;
 }
 
+interface RawErrorResponse {
+  message?: string;
+}
+
 function toAttendee(raw: RawAttendee): Attendee {
   return {
     id: raw.id,
@@ -69,6 +73,28 @@ export class AttendanceConflictError extends AttendanceApiError {
   }
 }
 
+async function readErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await response.json()) as RawErrorResponse;
+    const message = body.message?.trim();
+    if (message) {
+      return message;
+    }
+  } catch {
+    // Non-JSON or empty body — use the status-based fallback.
+  }
+
+  return fallback;
+}
+
+function defaultErrorMessage(status: number): string {
+  if (status === 404) {
+    return 'This attendee is not enrolled in this class.';
+  }
+
+  return `Request failed (${status}).`;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const apiBaseUrl = getApiBaseUrl();
   let response: Response;
@@ -93,10 +119,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const message =
-      response.status === 404
-        ? 'This attendee is not enrolled in this class.'
-        : `Request failed (${response.status}).`;
+    const message = await readErrorMessage(response, defaultErrorMessage(response.status));
     throw new AttendanceApiError(message, response.status);
   }
 
