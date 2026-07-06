@@ -29,7 +29,7 @@ class BulkUpdateAttendanceTest extends TestCase
                 ->create();
         }
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees", [
             'status' => AttendanceStatus::Attended->value,
         ]);
 
@@ -65,7 +65,7 @@ class BulkUpdateAttendanceTest extends TestCase
                 ->create();
         }
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees", [
             'status' => AttendanceStatus::NotAttended->value,
         ]);
 
@@ -108,7 +108,7 @@ class BulkUpdateAttendanceTest extends TestCase
 
         // Staff clicks "mark all attended" to sweep up the stragglers.
         $this->travel(5)->minutes();
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees", [
             'status' => AttendanceStatus::Attended->value,
         ]);
 
@@ -128,7 +128,7 @@ class BulkUpdateAttendanceTest extends TestCase
     {
         $class = FitnessClass::factory()->create();
 
-        $response = $this->patchJson("/api/classes/{$class->id}/attendees", [
+        $response = $this->patchJson("/api/v1/classes/{$class->id}/attendees", [
             'status' => 'wrong_status',
         ]);
 
