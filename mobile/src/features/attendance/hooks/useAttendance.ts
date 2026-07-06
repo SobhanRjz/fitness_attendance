@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { notify } from '../../../shared/alert';
 import {
+  AttendanceApiError,
   AttendanceConflictError,
   getAttendees,
   markAllAttendance,
@@ -34,6 +35,15 @@ export interface UseAttendanceResult {
 
 function oppositeStatus(status: AttendanceStatus): AttendanceStatus {
   return status === 'attended' ? 'not_attended' : 'attended';
+}
+
+function notifyRequestError(title: string, error: unknown): void {
+  if (error instanceof AttendanceApiError && error.status === 429) {
+    notify('Too many requests', error.message);
+    return;
+  }
+
+  notify(title, error instanceof Error ? error.message : 'Please try again.');
 }
 
 /**
@@ -192,7 +202,7 @@ export function useAttendance(classId: number): UseAttendanceResult {
         setSyncNotices(new Map());
       })
       .catch((error: unknown) => {
-        notify("Couldn't refresh", error instanceof Error ? error.message : 'Please try again.');
+        notifyRequestError("Couldn't refresh", error);
       })
       .finally(() => setIsRefreshing(false));
   }, [classId, applyAttendees]);
@@ -237,32 +247,27 @@ export function useAttendance(classId: number): UseAttendanceResult {
         .catch((error: unknown) => {
           if (error instanceof AttendanceConflictError) {
             // Someone else already updated this row first — reconcile to the
-            // server's version immediately. Always surface the inline hint:
-            // another staff member's write already landed on this row before
-            // ours, so this staff member's own tap was silently overwritten —
-            // that's true regardless of whether the resulting status happens
-            // to match what they were trying to set.
-            
-            updateAttendance(classId, memberId, nextStatus, error.fresh.version)
-              .then((updated) => {
-                applyAttendees((current) =>
-                  current.map((attendee) => (attendee.member.id === memberId ? updated : attendee)),
-                );
-              })
-              removePending(memberId);
-              // if (nextStatus !== error.fresh.status) {
-              //   showSyncNotice(memberId, error.fresh);
-              // }.
+            // server's version immediately and free the row up for the next
+            // tap right away, instead of retrying against a stale version.
+            // Only surface the inline hint when the server's status differs
+            // from what this staff member intended: if it already matches,
+            // their tap effectively "won" and nothing needs calling out.
+            applyAttendees((current) =>
+              current.map((attendee) => (attendee.member.id === memberId ? error.fresh : attendee)),
+            );
+            removePending(memberId);
+            if (nextStatus !== error.fresh.status) {
               showSyncNotice(memberId, error.fresh);
-              checkForRosterUpdates(memberId);
-            return
+            }
+            checkForRosterUpdates(memberId);
+            return;
           }
 
           // Any other failure: roll back the optimistic change.
           applyAttendees((current) =>
             current.map((attendee) => (attendee.member.id === memberId ? optimisticTarget : attendee)),
           );
-          notify("Couldn't save", error instanceof Error ? error.message : 'Please try again.');
+          notifyRequestError("Couldn't save", error);
           removePending(memberId);
         });
     },
@@ -305,9 +310,9 @@ export function useAttendance(classId: number): UseAttendanceResult {
           );
         })
         .catch((error: unknown) => {
-          notify(
+          notifyRequestError(
             status === 'attended' ? "Couldn't mark everyone present" : "Couldn't mark everyone absent",
-            error instanceof Error ? error.message : 'Please try again.',
+            error,
           );
         })
         .finally(() => setMarkingAllStatus(null));
