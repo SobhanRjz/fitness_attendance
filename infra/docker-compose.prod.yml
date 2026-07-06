@@ -44,6 +44,8 @@ services:
       SESSION_DRIVER: database
       CACHE_STORE: database
       QUEUE_CONNECTION: database
+      RATE_LIMIT_MAX_ATTEMPTS: ${RATE_LIMIT_MAX_ATTEMPTS:-60}
+      RATE_LIMIT_DECAY_SECONDS: ${RATE_LIMIT_DECAY_SECONDS:-60}
     depends_on:
       db:
         condition: service_healthy
