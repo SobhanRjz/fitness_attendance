@@ -45,6 +45,13 @@ docker compose -f infra/docker-compose.dev.yml --env-file infra/.env up --build 
 - API: `http://localhost:8000/api/v1`, matching the [root README](../README.md#backend)'s non-Docker instructions. Migrations run automatically on container start.
 - Mobile web preview: `http://localhost:8081`.
 
+`mobile/` is bind-mounted into the `mobile` container, so a local `mobile/.env` (e.g. a
+LAN IP for physical-device testing) is technically visible inside it too — but it's
+harmless here: Expo's dotenv loader (`@expo/env`) never overrides a variable already
+present in the environment, and `EXPO_PUBLIC_API_URL` is already set via `MOBILE_API_URL`
+above before the process starts. `mobile/.env` is also git-ignored, so it's never
+committed regardless.
+
 To run tests or artisan commands inside the backend container:
 
 ```bash
