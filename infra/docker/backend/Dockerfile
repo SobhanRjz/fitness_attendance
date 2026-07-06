@@ -71,6 +71,7 @@ CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
 # ---------------------------------------------------------------------------
 FROM php-base AS app
 COPY infra/docker/backend/php.prod.ini /usr/local/etc/php/conf.d/99-security.ini
+COPY infra/docker/backend/zz-www-tuning.conf /usr/local/etc/php-fpm.d/zz-www-tuning.conf
 COPY --from=vendor --chown=www-data:www-data /app ./
 RUN chown -R www-data:www-data storage bootstrap/cache
 USER www-data
