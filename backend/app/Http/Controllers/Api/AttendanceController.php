@@ -24,7 +24,7 @@ class AttendanceController extends Controller
     ) {}
 
     /**
-     * GET /api/classes/{class}/attendees
+     * GET /api/v1/classes/{class}/attendees
      */
     public function index(FitnessClass $class): AttendeeCollection
     {
@@ -34,7 +34,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * PATCH /api/classes/{class}/attendees/{member}
+     * PATCH /api/v1/classes/{class}/attendees/{member}
      */
     public function update(
         UpdateAttendanceRequest $request,
@@ -53,7 +53,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * PATCH /api/classes/{class}/attendees
+     * PATCH /api/v1/classes/{class}/attendees
      */
     public function bulkUpdate(
         BulkUpdateAttendanceRequest $request,
