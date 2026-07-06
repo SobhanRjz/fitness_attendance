@@ -18,19 +18,45 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
-        <env name="DB_URL" value=""/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            force="true" on every <env>/<server> entry below: PHPUnit's <env> only
+            touches putenv()/$_ENV, but Laravel's env() helper reads $_SERVER first
+            (Illuminate\Support\Env's adapter chain). Our Docker dev container's
+            `environment:` block (see infra/docker-compose.dev.yml) sets real
+            DB_CONNECTION=pgsql/SESSION_DRIVER=database process env vars, which
+            populate $_SERVER too — so both tags are required, and both need
+            force="true", or the container's values win and tests silently run
+            against the live dev Postgres database instead of this isolated,
+            in-memory config.
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <env name="DB_CONNECTION" value="sqlite" force="true"/>
+        <env name="DB_DATABASE" value=":memory:" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+
+        <server name="APP_ENV" value="testing" force="true"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <server name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <server name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <server name="CACHE_STORE" value="array" force="true"/>
+        <server name="DB_CONNECTION" value="sqlite" force="true"/>
+        <server name="DB_DATABASE" value=":memory:" force="true"/>
+        <server name="DB_URL" value="" force="true"/>
+        <server name="MAIL_MAILER" value="array" force="true"/>
+        <server name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <server name="SESSION_DRIVER" value="array" force="true"/>
+        <server name="PULSE_ENABLED" value="false" force="true"/>
+        <server name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <server name="NIGHTWATCH_ENABLED" value="false" force="true"/>
     </php>
 </phpunit>
