@@ -16,7 +16,7 @@ function resolveApiBaseUrl(): string {
   }
 
   const defaultHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-  return `http://${defaultHost}:8000/api`;
+  return `http://${defaultHost}:8000/api/v1`;
 }
 
 let cachedBaseUrl: string | null = null;
