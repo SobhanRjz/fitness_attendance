@@ -1,0 +1,8 @@
+# Force LF line endings for files that run inside Linux containers, regardless
+# of the checkout platform's core.autocrlf setting. Without this, Windows
+# checkouts turn shebang lines like "#!/bin/sh" into "#!/bin/sh\r", which the
+# container's kernel can't resolve as an interpreter ("no such file or
+# directory") — see infra/docker/backend/entrypoint.dev.sh.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
