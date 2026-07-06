@@ -95,7 +95,7 @@ services:
       dockerfile: infra/docker/mobile/Dockerfile
       target: prod
       args:
-        EXPO_PUBLIC_API_URL: ${MOBILE_API_URL:?set MOBILE_API_URL in infra/.env, e.g. https://api.example.com/api}
+        EXPO_PUBLIC_API_URL: ${MOBILE_API_URL:?set MOBILE_API_URL in infra/.env, e.g. https://api.example.com/api/v1}
     restart: unless-stopped
     ports:
       - "${MOBILE_PORT:-8081}:8080"
