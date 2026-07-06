@@ -15,6 +15,7 @@ staff editing the same class at once.
 - [Assumptions](#assumptions)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
+- [Rate Limiting](#rate-limiting)
 - [Design Decisions](#design-decisions)
 - [Frontend Notes](#frontend-notes)
 
@@ -92,6 +93,12 @@ machine via `php artisan serve`. For a **physical device**, set `EXPO_PUBLIC_API
 ```bash
 php artisan serve --host=0.0.0.0 --port=8000
 ```
+
+`mobile/.env` is git-ignored, so a LAN IP set there is local to your machine only — it's
+never committed and won't affect anyone else cloning the repo. It's also ignored when
+running via Docker: `docker-compose.dev.yml` injects `EXPO_PUBLIC_API_URL` as a container
+environment variable, which Expo's dotenv loader never overrides with a `.env` file value
+(see [infra/README.md](infra/README.md)).
 
 Run the frontend tests:
 
@@ -215,6 +222,26 @@ don't change), so an existing check-in time is never overwritten.
 ```
 
 
+
+## Rate Limiting
+
+Every `/api/v1/...` route is protected by a fixed-window rate limiter (per client IP):
+`60` requests per rolling `60`-second window by default, configurable via
+`RATE_LIMIT_MAX_ATTEMPTS`/`RATE_LIMIT_DECAY_SECONDS` in `.env` (see
+`backend/config/rate_limiting.php`).
+
+- Time is sliced into fixed, non-overlapping windows (e.g. `:00`–`:59`). Each request in a
+  window increments a counter in cache; once the counter exceeds the limit, further
+  requests get `429 Too Many Requests` until the window rolls over and the counter resets
+  to zero.
+- Every response carries `X-RateLimit-Limit`/`X-RateLimit-Remaining`; a `429` also carries
+  `Retry-After` (seconds until the next window).
+- Implementation: `App\Services\RateLimiting\FixedWindowRateLimiter` (the algorithm, via
+  `Cache::add` + `Cache::increment` for an atomic per-window counter) and
+  `App\Http\Middleware\FixedWindowRateLimit` (the HTTP wiring, aliased as `throttle.fixed`).
+- Trade-off (inherent to fixed-window limiting, chosen for its O(1) storage and simplicity
+  over a sliding window/log): a client can burst up to twice the limit if the burst
+  straddles a window boundary.
 
 ## Design Decisions
 
