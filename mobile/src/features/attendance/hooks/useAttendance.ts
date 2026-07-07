@@ -16,7 +16,6 @@ export interface UseAttendanceResult {
   attendees: Attendee[];
   errorMessage: string | null;
   pendingMemberIds: ReadonlySet<number>;
-  /** Other staff's write snapshot per row, shown after a 409 conflict. */
   syncNotices: ReadonlyMap<number, SyncNoticeDetails>;
   isMarkingAllPresent: boolean;
   isMarkingAllAbsent: boolean;
@@ -37,10 +36,9 @@ function oppositeStatus(status: AttendanceStatus): AttendanceStatus {
 }
 
 /**
- * Owns the roster's data lifecycle: initial load (loading/success/error —
- * these three states drive the whole screen), optimistic per-row toggles
- * with rollback/conflict-reconciliation, the "mark all present"/"mark all
- * absent" bulk actions, and pull-to-refresh.
+ * Owns the roster's data lifecycle: initial load, optimistic per-row
+ * toggles with rollback/conflict handling, bulk mark-all actions, and
+ * pull-to-refresh.
  */
 export function useAttendance(classId: number): UseAttendanceResult {
   const [status, setStatus] = useState<AttendanceLoadStatus>('loading');
@@ -49,17 +47,8 @@ export function useAttendance(classId: number): UseAttendanceResult {
   const [pendingMemberIds, setPendingMemberIds] = useState<Set<number>>(new Set());
   const [markingAllStatus, setMarkingAllStatus] = useState<AttendanceStatus | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // True once a background check has noticed that some *other* row changed
-  // on the server since we last loaded it. We never apply that data
-  // silently — see `checkForRosterUpdates` — the user pulls to refresh to
-  // bring it in explicitly.
   const [hasRosterUpdates, setHasRosterUpdates] = useState(false);
   const [syncNotices, setSyncNotices] = useState<Map<number, SyncNoticeDetails>>(new Map());
-
-  // Mirror `attendees`/`pendingMemberIds`, but readable synchronously (not
-  // via a stale closure) from background callbacks like
-  // `checkForRosterUpdates`, which run well after the render that scheduled
-  // them.
   const attendeesRef = useRef<Attendee[]>([]);
   const pendingMemberIdsRef = useRef<Set<number>>(new Set());
 
@@ -128,21 +117,8 @@ export function useAttendance(classId: number): UseAttendanceResult {
   }, []);
 
   /**
-   * After a single-row update, silently check whether any *other* row has
-   * since changed on the server (e.g. another staff member updated it).
-   *
-   * This never applies the fetched data — it only flips `hasRosterUpdates`
-   * so the screen can show a "new updates available" banner and let the
-   * user decide when to pull to refresh, instead of rows jumping around
-   * underneath them. `excludeMemberId` is the row this client just wrote
-   * itself (already applied from the API response) and any row with a save
-   * currently in flight is skipped too, since its local status doesn't
-   * reflect the write yet.
-   *
-   * We compare attendance status rather than `version`: the version bumps
-   * on every write, but what the user actually cares about is whether
-   * someone else's change would flip a row's present/absent state on their
-   * screen.
+   * After a single-row update, silently check whether some *other* row has
+   * changed on the server
    */
   const checkForRosterUpdates = useCallback(
     (excludeMemberId: number): void => {
@@ -164,17 +140,13 @@ export function useAttendance(classId: number): UseAttendanceResult {
           }
         })
         .catch(() => {
-          // Best-effort background check — staying quiet is safer than a false alarm.
         });
     },
     [classId],
   );
 
   /**
-   * Pull-to-refresh: fetch the latest roster and apply it. Rows with a save
-   * currently in flight keep their local (optimistic/reconciled) value
-   * instead of being overwritten by a possibly-stale response, so this can
-   * never stomp on a write that hasn't landed yet.
+   * Pull-to-refresh
    */
   const refreshRoster = useCallback(() => {
     setIsRefreshing(true);
@@ -221,28 +193,16 @@ export function useAttendance(classId: number): UseAttendanceResult {
 
       updateAttendance(classId, memberId, nextStatus, optimisticTarget.version)
         .then((updated) => {
-          // Apply the server-confirmed row immediately for responsiveness,
-          // and free up this row for the next tap right away...
           applyAttendees((current) =>
             current.map((attendee) => (attendee.member.id === memberId ? updated : attendee)),
           );
           removePending(memberId);
 
-          // ...then silently check whether other rows changed elsewhere.
-          // This single update only ever touches this one row — the client
-          // never sends the whole stale roster back — so a 200 here tells
-          // us nothing about the rest of the list.
           checkForRosterUpdates(memberId);
         })
         .catch((error: unknown) => {
           if (error instanceof AttendanceConflictError) {
-            // Someone else already updated this row first — reconcile to the
-            // server's version immediately. Always surface the inline hint:
-            // another staff member's write already landed on this row before
-            // ours, so this staff member's own tap was silently overwritten —
-            // that's true regardless of whether the resulting status happens
-            // to match what they were trying to set.
-            
+            // Someone else's write landed on this row first. 
             updateAttendance(classId, memberId, nextStatus, error.fresh.version)
               .then((updated) => {
                 applyAttendees((current) =>
@@ -285,9 +245,6 @@ export function useAttendance(classId: number): UseAttendanceResult {
 
       markAllAttendance(classId, status)
         .then(() => {
-          // Mirrors the backend's filtered bulk UPDATE: only rows that actually
-          // change status receive a new version. Repeating "mark all absent"
-          // while everyone is already absent must stay a no-op for concurrency.
           applyAttendees((current) =>
             current.map((attendee) => {
               if (attendee.status === status) {
