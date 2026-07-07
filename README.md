@@ -5,8 +5,8 @@ attendees, toggle one attendee, or toggle the whole class — safely, even with 
 staff editing the same class at once.
 
 > **Status:** Backend and React Native attendance roster are implemented, tested, and
-> connected. Additional work (Docker, API versioning, rate limiting, CI, an
-> `attendance_events` audit table, and more) lives on the `develop` branch.
+> connected. Additional work (Docker, API versioning, rate limiting, CI, 
+> load testing and more) lives on the `develop` branch.
 
 **Built for scale:** 1000+ classes/day, 20+ attendees each, concurrent writes from
 multiple staff — see [Design Decisions](#design-decisions).
