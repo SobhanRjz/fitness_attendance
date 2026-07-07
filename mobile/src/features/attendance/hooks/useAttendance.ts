@@ -256,9 +256,10 @@ export function useAttendance(classId: number): UseAttendanceResult {
               current.map((attendee) => (attendee.member.id === memberId ? error.fresh : attendee)),
             );
             removePending(memberId);
-            if (nextStatus !== error.fresh.status) {
-              showSyncNotice(memberId, error.fresh);
-            }
+            // if (nextStatus !== error.fresh.status) {
+            //   showSyncNotice(memberId, error.fresh);
+            // }
+            showSyncNotice(memberId, error.fresh);
             checkForRosterUpdates(memberId);
             return;
           }
